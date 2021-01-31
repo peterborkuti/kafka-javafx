@@ -16,26 +16,59 @@
 
 package com.example.kafka.kafkademo;
 
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
 
-@Component
-public class Producer {
+import javax.annotation.PreDestroy;
+import java.util.Random;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
+@Component
+@Slf4j
+public class Producer {
     private final KafkaTemplate<String, String> kafkaTemplate;
+    private final ScheduledExecutorService service;
+    private ScheduledFuture scheduledFuture;
+    private final Random rnd = new Random();
+    private final byte[] bytes = new byte[1];
 
 
     @Value("${cloudkarafka.topic}")
     private String topic;
 
+    private AtomicInteger delay = new AtomicInteger(500);
+
     Producer(KafkaTemplate<String, String> kafkaTemplate) {
         this.kafkaTemplate = kafkaTemplate;
+
+        service = Executors.newSingleThreadScheduledExecutor();
+        service.schedule(() -> send(), delay.get(), TimeUnit.MILLISECONDS);
     }
 
-    public void send(SampleMessage message) {
-        this.kafkaTemplate.send(topic, message.getMessage());
-        System.out.println("Sent sample message [" + message + "] to " + topic);
+    private void send() {
+        rnd.nextBytes(bytes);
+        this.kafkaTemplate.send(topic, "" + bytes[0]);
+        log.debug("Sent sample message [" + bytes[0] + "] to " + topic);
+        service.schedule(() -> send(), delay.get(), TimeUnit.MILLISECONDS);
+    }
+
+    public void setDelay(int delay) {
+        this.delay.set(delay);
+    }
+
+    public int getDelay() {
+        return delay.get();
+    }
+
+    @PreDestroy
+    private void shutdown() throws InterruptedException {
+        service.shutdown();
     }
 
 }

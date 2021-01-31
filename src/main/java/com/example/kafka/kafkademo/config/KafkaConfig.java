@@ -51,8 +51,7 @@ public class KafkaConfig {
 
 
 	@Bean
-	public KafkaReceiver<String, String> kafkaReceiver(KafkaProperties kafkaProperties, KafkaAutoConfiguration autoConf) {
-
+	public KafkaReceiver<String, String> kafkaReceiver() {
 		Map<String, Object> props = new HashMap<>();
 		props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, servers);
 		props.put(ConsumerConfig.CLIENT_ID_CONFIG, "sample-consumer");
