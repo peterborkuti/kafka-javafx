@@ -40,17 +40,20 @@ public class UI implements ApplicationListener<ChartApplication.StageReadyEvent>
 	BarChart<String, Number> barChart;
 	final Label delayValue = new Label("");
 	final Label sendedNumberValue = new Label("");
+	int refreshValueInMillisecs = 5000;
+	final Label refreshTimeValue = new Label("" + refreshValueInMillisecs);
 	private KafkaProducer kafkaProducer;
+	private KafkaConsumer kafkaConsumer;
 	List<AtomicLong> datas =
 			IntStream.range(0,256).mapToObj(i -> new AtomicLong(0)).collect(Collectors.toList());
 
 	private Disposable consumerDisposable;
 	public UI(KafkaConsumer kafkaConsumer, KafkaProducer kafkaProducer) {
-		consumerDisposable = kafkaConsumer.getReceiver().map(ReceiverRecord::value).
-				filter(this::isByteValue).buffer(Duration.ofSeconds(5)).subscribe(this::consumeRecord);
 		this.kafkaProducer = kafkaProducer;
+		this.kafkaConsumer = kafkaConsumer;
 		delayValue.setText("" + kafkaProducer.getDelay());
 		sendedNumberValue.setText("" + kafkaProducer.getSendingNumber());
+		setRefresh(refreshValueInMillisecs);
 	}
 
 	private boolean isByteValue(String value) {
@@ -64,6 +67,23 @@ public class UI implements ApplicationListener<ChartApplication.StageReadyEvent>
 	@PreDestroy
 	private void unsubscribe() {
 		consumerDisposable.dispose();
+	}
+
+	private void setRefresh(int refreshValue) {
+		if (consumerDisposable != null && !consumerDisposable.isDisposed()) {
+			consumerDisposable.dispose();
+			try {
+				while (!consumerDisposable.isDisposed()) {
+					Thread.sleep(100);
+				}
+			} catch (InterruptedException e) {
+				log.error(e.getMessage(), e);
+			}
+		}
+
+		consumerDisposable = kafkaConsumer.getReceiver().map(ReceiverRecord::value).
+				filter(this::isByteValue).buffer(Duration.ofMillis(refreshValue)).subscribe(this::consumeRecord);
+		refreshValueInMillisecs = refreshValue;
 	}
 
 	private void consumeRecord(List<String> stringValues) {
@@ -115,6 +135,12 @@ public class UI implements ApplicationListener<ChartApplication.StageReadyEvent>
 				kafkaProducer.getSendingNumber(), kafkaProducer::setSendingNumber, sendedNumberValue);
 	}
 
+
+	private Slider getRefreshTime() {
+		return getSlider(100, 5000, 1000, 100,
+				refreshValueInMillisecs, this::setRefresh, refreshTimeValue);
+	}
+
 	private Slider getSlider(
 			int min, int max, int majorThickUnit, int blockIncrement, int initialValue,
 			Consumer<Integer> valueSetter, Label labelToSet) {
@@ -133,6 +159,18 @@ public class UI implements ApplicationListener<ChartApplication.StageReadyEvent>
 		});
 
 		return slider;
+	}
+
+	private void addSlider(GridPane grid, String labelText, Label valueLabel, int row, Slider slider) {
+		Label label = new Label(labelText);
+		GridPane.setConstraints(label, 0, row, 2, 1);
+		grid.getChildren().add(label);
+
+		GridPane.setConstraints(valueLabel, 2, row);
+		grid.getChildren().add(valueLabel);
+
+		GridPane.setConstraints(slider, 0, row+1, 3, 1);
+		grid.getChildren().add(slider);
 	}
 
 	private void draw(Stage stage) {
@@ -156,29 +194,9 @@ public class UI implements ApplicationListener<ChartApplication.StageReadyEvent>
 
 		scene.setRoot(grid);
 
-		/* DelaySlider Row 1 and 2 */
-		Label delayLabel = new Label("Producer delay in ms:");
-		GridPane.setConstraints(delayLabel, 0, 1, 2, 1);
-		grid.getChildren().add(delayLabel);
-
-		GridPane.setConstraints(delayValue, 2, 1);
-		grid.getChildren().add(delayValue);
-
-		Slider delaySlider = getDelaySlider();
-		GridPane.setConstraints(delaySlider, 0, 2, 3, 1);
-		grid.getChildren().add(delaySlider);
-
-		/* NumberSlider Row 3 and 4 */
-		Label numberLabel = new Label("Producer data:");
-		GridPane.setConstraints(numberLabel, 0, 3, 2, 1);
-		grid.getChildren().add(numberLabel);
-
-		GridPane.setConstraints(sendedNumberValue, 2, 3);
-		grid.getChildren().add(sendedNumberValue);
-
-		Slider dataSlider = getDataSlider();
-		GridPane.setConstraints(dataSlider, 0, 4, 3, 1);
-		grid.getChildren().add(dataSlider);
+		addSlider(grid, "Producer delay in ms", delayValue, 1, getDelaySlider());
+		addSlider(grid, "Producer data", sendedNumberValue, 3, getDataSlider());
+		addSlider(grid, "Refresh time in millis", refreshTimeValue, 5, getRefreshTime());
 
 		stage.show();
 	}
