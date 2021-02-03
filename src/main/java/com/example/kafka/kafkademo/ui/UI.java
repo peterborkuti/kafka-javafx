@@ -1,18 +1,22 @@
 package com.example.kafka.kafkademo.ui;
 
 import com.example.kafka.kafkademo.ChartApplication;
-import com.example.kafka.kafkademo.Consumer;
-import com.example.kafka.kafkademo.Producer;
+import com.example.kafka.kafkademo.services.KafkaConsumer;
+import com.example.kafka.kafkademo.services.KafkaProducer;
 import javafx.application.Platform;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
+import javafx.geometry.Insets;
+import javafx.scene.Group;
 import javafx.scene.Scene;
 import javafx.scene.chart.BarChart;
 import javafx.scene.chart.CategoryAxis;
 import javafx.scene.chart.NumberAxis;
 import javafx.scene.chart.XYChart;
+import javafx.scene.control.Label;
 import javafx.scene.control.Slider;
 import javafx.scene.layout.GridPane;
+import javafx.scene.paint.Color;
 import javafx.stage.Stage;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationListener;
@@ -23,8 +27,8 @@ import reactor.kafka.receiver.ReceiverRecord;
 import javax.annotation.PreDestroy;
 import java.time.Duration;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -34,17 +38,19 @@ import java.util.stream.IntStream;
 public class UI implements ApplicationListener<ChartApplication.StageReadyEvent> {
 	AtomicLong counts = new AtomicLong(0);
 	BarChart<String, Number> barChart;
-	private Producer producer;
+	final Label delayValue = new Label("");
+	final Label sendedNumberValue = new Label("");
+	private KafkaProducer kafkaProducer;
 	List<AtomicLong> datas =
 			IntStream.range(0,256).mapToObj(i -> new AtomicLong(0)).collect(Collectors.toList());
 
-	//private SimpleHistogramDataset dataset;
 	private Disposable consumerDisposable;
-	public UI(Consumer consumer, Producer producer) {
-		//dataset = new SimpleHistogramDataset("Key");
-		//IntStream.range(-128, 128).forEach(i -> dataset.addBin(new SimpleHistogramBin(i, i+1, true, false)));
-		consumerDisposable = consumer.getReceiver().map(ReceiverRecord::value).filter(this::isByteValue).buffer(Duration.ofSeconds(5)).subscribe(this::consumeRecord);
-		this.producer = producer;
+	public UI(KafkaConsumer kafkaConsumer, KafkaProducer kafkaProducer) {
+		consumerDisposable = kafkaConsumer.getReceiver().map(ReceiverRecord::value).
+				filter(this::isByteValue).buffer(Duration.ofSeconds(5)).subscribe(this::consumeRecord);
+		this.kafkaProducer = kafkaProducer;
+		delayValue.setText("" + kafkaProducer.getDelay());
+		sendedNumberValue.setText("" + kafkaProducer.getSendingNumber());
 	}
 
 	private boolean isByteValue(String value) {
@@ -73,21 +79,6 @@ public class UI implements ApplicationListener<ChartApplication.StageReadyEvent>
 		}
 	}
 
-	/*
-	private JFreeChart createChart() {
-		JFreeChart chart = ChartFactory.createHistogram("Histogram",
-				"Numbers between -128 and 127", "Counts", dataset, PlotOrientation.VERTICAL,
-				false, false, false);
-		XYPlot plot = (XYPlot) chart.getPlot();
-		plot.setDomainZeroBaselineVisible(false);
-		plot.getDomainAxis().setStandardTickUnits(NumberAxis.createIntegerTickUnits());
-		plot.getRangeAxis().setStandardTickUnits(NumberAxis.createIntegerTickUnits());
-
-		return chart;
-	}
-
-	 */
-
 	private void setData() {
 		if (barChart == null) {
 			return;
@@ -108,23 +99,36 @@ public class UI implements ApplicationListener<ChartApplication.StageReadyEvent>
 		BarChart<String, Number> bc = new BarChart<>(xAxis,yAxis);
 		bc.setTitle("Histogram");
 		xAxis.setLabel("Numbers between -128 and 127");
+		bc.setAnimated(false);
 
 		setData();
 
 		return bc;
 	}
+	private Slider getDelaySlider() {
+		return getSlider(1, 1000, 100, 10,
+				kafkaProducer.getDelay(), kafkaProducer::setDelay, delayValue);
+	}
 
-	private Slider getSlider() {
-		Slider slider = new Slider(0, 1000, producer.getDelay());
+	private Slider getDataSlider() {
+		return getSlider(-128, 127, 10, 10,
+				kafkaProducer.getSendingNumber(), kafkaProducer::setSendingNumber, sendedNumberValue);
+	}
+
+	private Slider getSlider(
+			int min, int max, int majorThickUnit, int blockIncrement, int initialValue,
+			Consumer<Integer> valueSetter, Label labelToSet) {
+		Slider slider = new Slider(min, max, initialValue);
 		slider.setShowTickMarks(true);
 		slider.setShowTickLabels(true);
-		slider.setMajorTickUnit(100);
-		slider.setBlockIncrement(10);
+		slider.setMajorTickUnit(majorThickUnit);
+		slider.setBlockIncrement(blockIncrement);
 
 		slider.valueProperty().addListener(new ChangeListener<Number>() {
 			public void changed(ObservableValue<? extends Number> ov,
 								Number old_val, Number new_val) {
-				producer.setDelay(new_val.intValue());
+				valueSetter.accept(new_val.intValue());
+				labelToSet.setText("" + new_val.intValue());
 			}
 		});
 
@@ -132,14 +136,50 @@ public class UI implements ApplicationListener<ChartApplication.StageReadyEvent>
 	}
 
 	private void draw(Stage stage) {
-		GridPane p = new GridPane();
+		Group root = new Group();
+		Scene scene = new Scene(root, 600, 400);
+		stage.setScene(scene);
+		stage.setTitle("Kafka demo");
+		scene.setFill(Color.BLACK);
+
+		GridPane grid = new GridPane();
+		grid.setPadding(new Insets(10, 10, 10, 10));
+		grid.setVgap(10);
+		grid.setHgap(70);
+
 		barChart = getBarChart();
-		p.add(barChart, 0, 0);
-		p.add(getSlider(), 0, 1);
-		stage.setScene(new Scene(p));
-		stage.setTitle("FXChart");
-		stage.setWidth(640);
-		stage.setHeight(480);
+
+		/* Chart Row 0, col 0-2 */
+		GridPane.setConstraints(barChart, 0, 0);
+		GridPane.setColumnSpan(barChart, 3);
+		grid.getChildren().add(barChart);
+
+		scene.setRoot(grid);
+
+		/* DelaySlider Row 1 and 2 */
+		Label delayLabel = new Label("Producer delay in ms:");
+		GridPane.setConstraints(delayLabel, 0, 1, 2, 1);
+		grid.getChildren().add(delayLabel);
+
+		GridPane.setConstraints(delayValue, 2, 1);
+		grid.getChildren().add(delayValue);
+
+		Slider delaySlider = getDelaySlider();
+		GridPane.setConstraints(delaySlider, 0, 2, 3, 1);
+		grid.getChildren().add(delaySlider);
+
+		/* NumberSlider Row 3 and 4 */
+		Label numberLabel = new Label("Producer data:");
+		GridPane.setConstraints(numberLabel, 0, 3, 2, 1);
+		grid.getChildren().add(numberLabel);
+
+		GridPane.setConstraints(sendedNumberValue, 2, 3);
+		grid.getChildren().add(sendedNumberValue);
+
+		Slider dataSlider = getDataSlider();
+		GridPane.setConstraints(dataSlider, 0, 4, 3, 1);
+		grid.getChildren().add(dataSlider);
+
 		stage.show();
 	}
 

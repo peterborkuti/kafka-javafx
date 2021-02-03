@@ -14,56 +14,52 @@
  * limitations under the License.
  */
 
-package com.example.kafka.kafkademo;
+package com.example.kafka.kafkademo.services;
 
+import lombok.Getter;
+import lombok.RequiredArgsConstructor;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.core.KafkaTemplate;
-import org.springframework.stereotype.Component;
+import org.springframework.stereotype.Service;
 
+import javax.annotation.PostConstruct;
 import javax.annotation.PreDestroy;
-import java.util.Random;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 
-@Component
+@Service
 @Slf4j
-public class Producer {
+@RequiredArgsConstructor
+public class KafkaProducer {
     private final KafkaTemplate<String, String> kafkaTemplate;
-    private final ScheduledExecutorService service;
-    private ScheduledFuture scheduledFuture;
-    private final Random rnd = new Random();
-    private final byte[] bytes = new byte[1];
-
+    private final ScheduledExecutorService service = Executors.newSingleThreadScheduledExecutor();
 
     @Value("${cloudkarafka.topic}")
     private String topic;
 
-    private AtomicInteger delay = new AtomicInteger(500);
+    @Getter
+    private int sendingNumber = (int)Math.floor(Math.random()*256 - 128);
 
-    Producer(KafkaTemplate<String, String> kafkaTemplate) {
-        this.kafkaTemplate = kafkaTemplate;
+    @Setter
+    @Getter
+    private Integer delay = 500;
 
-        service = Executors.newSingleThreadScheduledExecutor();
-        service.schedule(() -> send(), delay.get(), TimeUnit.MILLISECONDS);
+    public void setSendingNumber(int number) {
+        sendingNumber = Math.max(-128, Math.min(127, number));
+    }
+
+    @PostConstruct
+    private void init() {
+        service.schedule(() -> send(), delay, TimeUnit.MILLISECONDS);
     }
 
     private void send() {
-        rnd.nextBytes(bytes);
-        this.kafkaTemplate.send(topic, "" + bytes[0]);
-        log.debug("Sent sample message [" + bytes[0] + "] to " + topic);
-        service.schedule(() -> send(), delay.get(), TimeUnit.MILLISECONDS);
-    }
-
-    public void setDelay(int delay) {
-        this.delay.set(delay);
-    }
-
-    public int getDelay() {
-        return delay.get();
+        this.kafkaTemplate.send(topic, "" + sendingNumber);
+        log.debug("Sent sample message [" + sendingNumber + "] to " + topic);
+        service.schedule(() -> send(), delay, TimeUnit.MILLISECONDS);
     }
 
     @PreDestroy

@@ -14,37 +14,20 @@
  * limitations under the License.
  */
 
-package com.example.kafka.kafkademo;
+package com.example.kafka.kafkademo.services;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.serialization.IntegerDeserializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.kafka.support.KafkaHeaders;
-import org.springframework.messaging.handler.annotation.Header;
-import org.springframework.stereotype.Component;
 import org.springframework.stereotype.Service;
-import reactor.core.CoreSubscriber;
 import reactor.core.publisher.Flux;
-import reactor.core.publisher.FluxSink;
-import reactor.core.publisher.Hooks;
 import reactor.kafka.receiver.KafkaReceiver;
-import reactor.kafka.receiver.ReceiverOptions;
 import reactor.kafka.receiver.ReceiverRecord;
-
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 @Service
 @Slf4j
-public class Consumer {
+public class KafkaConsumer {
     private Flux<ReceiverRecord<String, String>> receiverRecordFlux;
 
-    public Consumer(KafkaReceiver<String, String> kafkaReceiver) {
+    public KafkaConsumer(KafkaReceiver<String, String> kafkaReceiver) {
         //Hooks.onOperatorDebug();
         receiverRecordFlux = kafkaReceiver.receive();
     }
