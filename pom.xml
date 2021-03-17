@@ -10,7 +10,7 @@
 	</parent>
 	<groupId>com.example.kafka</groupId>
 	<artifactId>kafkademo</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>0.0.2</version>
 	<name>kafkademo</name>
 	<description>Demo project for Spring Boot Kafka</description>
 	<properties>
@@ -40,13 +40,6 @@
 			<artifactId>javafx-controls</artifactId>
 			<version>15.0.1</version>
 		</dependency>
-
-		<dependency>
-			<groupId>org.jfree</groupId>
-			<artifactId>jfreechart-fx</artifactId>
-			<version>1.0.1</version>
-		</dependency>
-
 
 		<dependency>
 			<groupId>org.projectlombok</groupId>

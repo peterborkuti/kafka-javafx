@@ -16,6 +16,7 @@ import reactor.kafka.receiver.ReceiverOptions;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Random;
 
 @Configuration
 public class KafkaConfig {
@@ -54,7 +55,7 @@ public class KafkaConfig {
 	public KafkaReceiver<String, String> kafkaReceiver() {
 		Map<String, Object> props = new HashMap<>();
 		props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, servers);
-		props.put(ConsumerConfig.CLIENT_ID_CONFIG, "sample-consumer-1");
+		props.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer-ui-" + getRandomId());
 		props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
 		props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
 		props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
@@ -68,5 +69,13 @@ public class KafkaConfig {
 				ReceiverOptions.<String, String>create(props)
 						.subscription(Collections.singleton(topic));
 		return KafkaReceiver.create(receiverOptions);
+	}
+
+	public static String getRandomId() {
+		return String.format("%08d", getRandomIntId());
+	}
+
+	public static int getRandomIntId() {
+		return Math.abs(new Random().nextInt());
 	}
 }

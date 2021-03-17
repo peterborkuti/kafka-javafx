@@ -126,7 +126,7 @@ public class UI implements ApplicationListener<ChartApplication.StageReadyEvent>
 		return bc;
 	}
 	private Slider getDelaySlider() {
-		return getSlider(1, 1000, 100, 10,
+		return getSlider(1, 5000, 500, 100,
 				kafkaProducer.getDelay(), kafkaProducer::setDelay, delayValue);
 	}
 
